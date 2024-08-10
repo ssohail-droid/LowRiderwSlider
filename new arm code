@@ -1,0 +1,161 @@
+package org.firstinspires.ftc.robotcontroller;
+
+//import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+import static org.firstinspires.ftc.robotcontroller.external.samples.RobotAutoDriveByTime_Linear.TURN_SPEED;
+
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.util.Range;
+
+@TeleOp(name="BasicMecham", group="Iterative OpMode")
+public class BasicMecham extends OpMode {
+    // Declare OpMode members.
+    private ElapsedTime runtime = new ElapsedTime();
+    private DcMotor frontLeft = null;
+    private DcMotor backLeft = null;
+    private DcMotor frontRight = null;
+    private DcMotor backRight = null;
+    private DcMotor ms = null; // Motor without encoder
+    private Servo myServo = null; // New servo
+    private Servo s2 = null;
+    private Servo s3 = null;
+    private boolean turning = false;
+    private double turnStartTime = 0.0;
+    private static final double TURN_DURATION = 0.7; // Adjust this value based on your robot's turning speed
+    private static final double MOTOR_RUN_DURATION = 2.0; // Duration in seconds for ms motor rotation
+    private boolean isMotorRunning = false;
+    private boolean motorDirection = false; // False for counterclockwise, true for clockwise
+    private boolean xButtonPressed = false;
+    private double motorStartTime = 0.0; // Add this declaration
+
+    @Override
+    public void init() {
+        frontLeft  = hardwareMap.get(DcMotor.class, "front_Left");
+        backLeft  = hardwareMap.get(DcMotor.class, "back_Left");
+
+        frontRight = hardwareMap.get(DcMotor.class, "front_Right");
+        backRight = hardwareMap.get(DcMotor.class, "back_Right");
+
+
+        ms = hardwareMap.get(DcMotor.class, "ms"); // Initialize the new motor
+        myServo = hardwareMap.get(Servo.class, "s1"); // Initialize the new servo
+        s2 = hardwareMap.get(Servo.class, "s2"); // Initialize the new servo
+        s3 = hardwareMap.get(Servo.class, "s3"); // Initialize the new servo
+
+        // Set the direction for motors if necessary
+        frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        backRight.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // Set the initial position for the servo
+        myServo.setPosition(0.0);
+
+        // Tell the driver that initialization is complete.
+        telemetry.addData("Status", "Initialized");
+    }
+
+    @Override
+    public void init_loop() {
+    }
+
+    @Override
+    public void start() {
+        runtime.reset();
+    }
+
+    @Override
+    public void loop() {
+        // Setup a variable for each drive wheel to save power level for telemetry
+        double frontLeftPower;
+        double backLeftPower;
+
+        double frontRightPower;
+        double backRightPower;
+
+        double y = -gamepad1.left_stick_y;
+        double x =  gamepad1.left_stick_x;
+
+        // Check if the A button is pressed to initiate the 180-degree turn
+        if (gamepad1.a && !turning) {
+            turning = true;
+            turnStartTime = runtime.seconds();
+        }
+
+        double turn = 0.0;
+
+        // If currently turning, set the turn power
+        if (turning) {
+            turn = -TURN_SPEED; // Set turning power
+            // Check if the turn duration has passed
+            if (runtime.seconds() - turnStartTime >= TURN_DURATION) {
+                turning = false; // Stop turning
+            }
+        }
+
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(turn), 1);
+
+        frontLeftPower = (y + x + turn) / denominator;
+        backLeftPower  = (y - x + turn) / denominator;
+
+        frontRightPower = (y - x - turn) / denominator;
+        backRightPower  = (y + x - turn) / denominator;
+
+        frontLeft.setPower(frontLeftPower);
+        backLeft.setPower(backLeftPower);
+
+        frontRight.setPower(frontRightPower);
+        backRight.setPower(backRightPower);
+
+        // Toggle motor direction using the X button
+        if (gamepad1.x && !xButtonPressed) {
+            motorDirection = !motorDirection;
+            isMotorRunning = true;
+            motorStartTime = runtime.seconds();
+            xButtonPressed = true;
+            ms.setPower(motorDirection ? -1.0 : 1.0); // Set motor power based on direction
+        } else if (!gamepad1.x) {
+            xButtonPressed = false;
+        }
+
+        // Check if the motor should stop
+        if (isMotorRunning && runtime.seconds() - motorStartTime >= MOTOR_RUN_DURATION) {
+            ms.setPower(0.0); // Stop the motor
+            isMotorRunning = false;
+        }
+
+        // the s1
+        if (gamepad1.b) {
+            myServo.setPosition(0.0); // Set servo position to 180 degrees
+        } else {
+            myServo.setPosition(0.28); // Set servo position to 0 degrees
+        }
+        // the s2 pared w s3
+        if (gamepad1.y) {
+            s2.setPosition(0.0); // Set servo position to 180 degrees
+        } else {
+            s2.setPosition(0.28); // Set servo position to 0 degrees
+        }
+        // s3
+        if (gamepad1.y) {
+            s3.setPosition(0.28); // Set servo position to 180 degrees
+        } else {
+            s3.setPosition(0.0); // Set servo position to 0 degrees
+        }
+
+        // Show the elapsed game time and wheel power.
+        telemetry.addData("Status", "Run Time: " + runtime.toString());
+        telemetry.addData("Left", "front (%.2f), back (%.2f)", frontLeftPower, backLeftPower);
+        telemetry.addData("Right", "front (%.2f), back (%.2f)", frontRightPower, backRightPower);
+        telemetry.addData("MS Motor Direction", motorDirection ? "Clockwise" : "Counterclockwise");
+        telemetry.addData("MS Motor Power", ms.getPower()); // Display ms motor power
+    }
+
+    @Override
+    public void stop() {
+        ms.setPower(0.0); // Ensure motor is stopped
+        myServo.setPosition(0.0); // Ensure servo is reset to 0 degrees
+    }
+}
